@@ -62,9 +62,10 @@
     (ring/run-jetty handler {:port 18080 :join? false})))
 
 (singleton-fixture
- (defn server-fixture [f]
-   (println "[+++] Starting Jetty test server")
-   (let [server (ring/run-jetty handler {:port 18080 :join? false})]
-     (when f (f))
-     (println "[---] Stopping Jetty test server")
-     (.stop server))))
+ (def server-fixture
+   (singleton-fixture
+    (fn [f]
+      (println "[+++] Starting Jetty test server")
+      (let [server (ring/run-jetty handler {:port 18080 :join? false})]
+        (when f (f))
+        (println "[---] Stopping Jetty test server"))))))
