@@ -16,13 +16,16 @@
                  [cheshire "5.0.2"]
                  [crouton "0.1.1"]]
   :profiles {:dev {:dependencies [[org.clojure/clojure "1.5.0"]
+                                  [name.stadig/conjecture "0.1.0"]
                                   [ring/ring-jetty-adapter "1.1.0"]
                                   [ring/ring-devel "1.1.0"]]}
              :1.2 {:dependencies [[org.clojure/clojure "1.2.1"]]}
              :1.3 {:dependencies [[org.clojure/clojure "1.3.0"]]}
              :1.4 {:dependencies [[org.clojure/clojure "1.4.0"]]}}
-  :aliases {"all" ["with-profile" "dev,1.3:dev,1.4:dev"]}
-  :plugins [[codox "0.6.3"]]
+  :aliases {"test" "conjecture"
+            "all" ["with-profile" "dev,1.3:dev,1.4:dev"]}
+  :plugins [[codox "0.6.3"]
+            [name.stadig/lein-conjecture "0.1.0"]]
   :test-selectors {:default  #(not (:integration %))
                    :integration :integration
                    :all (constantly true)})

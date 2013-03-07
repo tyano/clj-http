@@ -1,5 +1,5 @@
 (ns clj-http.test.conn-mgr
-  (:use [clojure.test])
+  (:use [name.stadig.conjecture])
   (:require [clj-http.conn-mgr :as conn-mgr]
             [clj-http.core :as core]
             [ring.adapter.jetty :as ring])

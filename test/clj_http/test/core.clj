@@ -1,9 +1,10 @@
 (ns clj-http.test.core
-  (:use [clojure.test]
+  (:use [name.stadig.conjecture]
         [clojure.java.io :only [file]])
   (:require [clojure.pprint :as pp]
             [clj-http.client :as client]
             [clj-http.core :as core]
+            [clj-http.test.support :as support]
             [clj-http.util :as util]
             [cheshire.core :as json]
             [ring.adapter.jetty :as ring])
@@ -14,63 +15,7 @@
            (org.apache.http.protocol HttpContext ExecutionContext)
            (org.apache.http.impl.client DefaultHttpClient)))
 
-(defn handler [req]
-  ;;(pp/pprint req)
-  ;;(println) (println)
-  (condp = [(:request-method req) (:uri req)]
-    [:get "/get"]
-    {:status 200 :body "get"}
-    [:get "/clojure"]
-    {:status 200 :body "{:foo \"bar\" :baz 7M :eggplant {:quux #{1 2 3}}}"
-     :headers {"content-type" "application/clojure"}}
-    [:get "/clojure-bad"]
-    {:status 200 :body "{:foo \"bar\" :baz #=(+ 1 1)}"
-     :headers {"content-type" "application/clojure"}}
-    [:get "/json"]
-    {:status 200 :body "{\"foo\":\"bar\"}"}
-    [:get "/json-bad"]
-    {:status 400 :body "{\"foo\":\"bar\"}"}
-    [:get "/redirect"]
-    {:status 302 :headers
-     {"location" "http://localhost:18080/redirect"}}
-    [:get "/redirect-to-get"]
-    {:status 302 :headers
-     {"location" "http://localhost:18080/get"}}
-    [:head "/head"]
-    {:status 200}
-    [:get "/content-type"]
-    {:status 200 :body (:content-type req)}
-    [:get "/header"]
-    {:status 200 :body (get-in req [:headers "x-my-header"])}
-    [:post "/post"]
-    {:status 200 :body (slurp (:body req))}
-    [:get "/error"]
-    {:status 500 :body "o noes"}
-    [:get "/timeout"]
-    (do
-      (Thread/sleep 10)
-      {:status 200 :body "timeout"})
-    [:delete "/delete-with-body"]
-    {:status 200 :body "delete-with-body"}
-    [:post "/multipart"]
-    {:status 200 :body (:body req)}
-    [:get "/get-with-body"]
-    {:status 200 :body (:body req)}
-    [:options "/options"]
-    {:status 200 :body "options"}
-    [:copy "/copy"]
-    {:status 200 :body "copy"}
-    [:move "/move"]
-    {:status 200 :body "move"}
-    [:patch "/patch"]
-    {:status 200 :body "patch"}
-    [:get "/headers"]
-    {:status 200 :body (json/encode (:headers req))}))
-
-(defn run-server
-  []
-  (defonce server
-    (ring/run-jetty handler {:port 18080 :join? false})))
+(use-fixtures :once support/server-fixture)
 
 (defn localhost [path]
   (str "http://localhost:18080" path))
@@ -87,19 +32,16 @@
   (slurp (:body req)))
 
 (deftest ^{:integration true} makes-get-request
-  (run-server)
   (let [resp (request {:request-method :get :uri "/get"})]
     (is (= 200 (:status resp)))
     (is (= "get" (slurp-body resp)))))
 
 (deftest ^{:integration true} makes-head-request
-  (run-server)
   (let [resp (request {:request-method :head :uri "/head"})]
     (is (= 200 (:status resp)))
     (is (nil? (:body resp)))))
 
 (deftest ^{:integration true} sets-content-type-with-charset
-  (run-server)
   (let [resp (client/request {:scheme :http
                               :server-name "localhost"
                               :server-port 18080
@@ -109,7 +51,6 @@
     (is (= "text/plain; charset=UTF-8" (:body resp)))))
 
 (deftest ^{:integration true} sets-content-type-without-charset
-  (run-server)
   (let [resp (client/request {:scheme :http
                               :server-name "localhost"
                               :server-port 18080
@@ -118,30 +59,25 @@
     (is (= "text/plain" (:body resp)))))
 
 (deftest ^{:integration true} sets-arbitrary-headers
-  (run-server)
   (let [resp (request {:request-method :get :uri "/header"
                        :headers {"x-my-header" "header-val"}})]
     (is (= "header-val" (slurp-body resp)))))
 
 (deftest ^{:integration true} sends-and-returns-byte-array-body
-  (run-server)
   (let [resp (request {:request-method :post :uri "/post"
                        :body (util/utf8-bytes "contents")})]
     (is (= 200 (:status resp)))
     (is (= "contents" (slurp-body resp)))))
 
 (deftest ^{:integration true} returns-arbitrary-headers
-  (run-server)
   (let [resp (request {:request-method :get :uri "/get"})]
     (is (string? (get-in resp [:headers "date"])))))
 
 (deftest ^{:integration true} returns-status-on-exceptional-responses
-  (run-server)
   (let [resp (request {:request-method :get :uri "/error"})]
     (is (= 500 (:status resp)))))
 
 (deftest ^{:integration true} sets-socket-timeout
-  (run-server)
   (try
     (is (thrown? java.net.SocketTimeoutException
                  (client/request {:scheme :http
@@ -151,13 +87,12 @@
                                   :socket-timeout 1})))))
 
 (deftest ^{:integration true} delete-with-body
-  (run-server)
   (let [resp (request {:request-method :delete :uri "/delete-with-body"
                        :body (.getBytes "foo bar")})]
     (is (= 200 (:status resp)))))
 
 (deftest ^{:integration true} self-signed-ssl-get
-  (let [t (doto (Thread. #(ring/run-jetty handler
+  (let [t (doto (Thread. #(ring/run-jetty support/handler
                                           {:port 8081 :ssl-port 18082 :ssl? true
                                            :keystore "test-resources/keystore"
                                            :key-password "keykey"})) .start)]
@@ -177,7 +112,6 @@
         (.stop t)))))
 
 (deftest ^{:integration true} multipart-form-uploads
-  (run-server)
   (let [bytes (util/utf8-bytes "byte-test")
         stream (ByteArrayInputStream. bytes)
         resp (request {:request-method :post :uri "/multipart"
@@ -209,7 +143,6 @@
     (is (re-find #"content" resp-body))))
 
 (deftest ^{:integration true} t-save-request-obj
-  (run-server)
   (let [resp (request {:request-method :post :uri "/post"
                        :body "foo bar"
                        :save-request? true
@@ -248,7 +181,6 @@
        {"set-cookie" ["one" "two"] "server" "some-server"}))
 
 (deftest ^{:integration true} t-streaming-response
-  (run-server)
   (let [stream (:body (request {:request-method :get :uri "/get" :as :stream}))
         body (slurp stream)]
     (is (= "get" body))))
@@ -258,7 +190,6 @@
         (client/request {:method :bad :url "http://example.org"}))))
 
 (deftest ^{:integration true} throw-on-too-many-redirects
-  (run-server)
   (let [resp (client/get (localhost "/redirect")
                          {:max-redirects 2 :throw-exceptions false})]
     (is (= 302 (:status resp)))
@@ -272,19 +203,16 @@
                     {:throw-exceptions true}))))
 
 (deftest ^{:integration true} get-with-body
-  (run-server)
   (let [resp (request {:request-method :get :uri "/get-with-body"
                        :body (.getBytes "foo bar")})]
     (is (= 200 (:status resp)))
     (is (= "foo bar" (String. (:body resp))))))
 
 (deftest ^{:integration true} head-with-body
-  (run-server)
   (let [resp (request {:request-method :head :uri "/head" :body "foo"})]
     (is (= 200 (:status resp)))))
 
 (deftest ^{:integration true} t-clojure-output-coercion
-  (run-server)
   (let [resp (client/get (localhost "/clojure") {:as :clojure})]
     (is (= 200 (:status resp)))
     (is (= {:foo "bar" :baz 7M :eggplant {:quux #{1 2 3}}} (:body resp))))
@@ -293,7 +221,6 @@
     (is (= {:foo "bar" :baz 7M :eggplant {:quux #{1 2 3}}} (:body resp)))))
 
 (deftest ^{:integration true} t-json-output-coercion
-  (run-server)
   (let [resp (client/get (localhost "/json") {:as :json})
         resp-str (client/get (localhost "/json")
                              {:as :json :coerce :exceptional})
@@ -318,7 +245,6 @@
     (is (= "{\"foo\":\"bar\"}" (:body bad-resp-json2)))))
 
 (deftest ^{:integration true} t-ipv6
-  (run-server)
   (let [resp (client/get "http://[::1]:18080/get")]
     (is (= 200 (:status resp)))
     (is (= "get" (:body resp)))))
@@ -339,7 +265,6 @@
 
 ;; super-basic test for methods that aren't used that often
 (deftest ^{:integration true} t-copy-options-move
-  (run-server)
   (let [resp1 (client/options (localhost "/options"))
         resp2 (client/move (localhost "/move"))
         resp3 (client/copy (localhost "/copy"))
@@ -351,7 +276,6 @@
     (is (= "patch" (:body resp4)))))
 
 (deftest ^{:integration true} t-json-encoded-form-params
-  (run-server)
   (let [params {:param1 "value1" :param2 {:foo "bar"}}
         resp (client/post (localhost "/post") {:content-type :json
                                                :form-params params})]
@@ -359,7 +283,6 @@
     (is (= (json/encode params) (:body resp)))))
 
 (deftest ^{:integration true} t-response-interceptor
-  (run-server)
   (let [saved-ctx (atom [])
         {:keys [status trace-redirects] :as resp}
         (client/get
@@ -376,7 +299,6 @@
     (is (every? #(instance? HttpConnection (:http-conn %)) @saved-ctx))))
 
 (deftest ^{:integration true} t-send-input-stream-body
-  (run-server)
   (let [b1 (:body (client/post "http://localhost:18080/post"
                                {:body (ByteArrayInputStream. (.getBytes "foo"))
                                 :length 3}))
@@ -406,7 +328,6 @@
 ;; This relies on connections to writequit.org being slower than 1ms, if this
 ;; fails, you must have very nice internet.
 (deftest ^{:integration true} sets-conn-timeout
-  (run-server)
   (try
     (is (thrown? org.apache.http.conn.ConnectTimeoutException
                  (client/request {:scheme :https
@@ -417,7 +338,6 @@
                                   :conn-timeout 1})))))
 
 (deftest ^{:integration true} connection-pool-timeout
-  (run-server)
   (client/with-connection-pool {:timeout 1 :threads 1 :default-per-route 1}
     (let [async-request #(future (client/request {:scheme :http
                                                   :server-name "localhost"
@@ -436,7 +356,6 @@
       (is (or timeout-error1 timeout-error2)))))
 
 (deftest ^{:integration true} t-header-collections
-  (run-server)
   (let [headers (-> (client/get "http://localhost:18080/headers"
                                 {:headers {"foo" ["bar" "baz"]
                                            "eggplant" "quux"}})
@@ -446,7 +365,6 @@
            (select-keys headers ["foo" "eggplant"])))))
 
 (deftest ^{:integration true} t-clojure-no-read-eval
-  (run-server)
   (is (thrown-with-msg?
         java.lang.RuntimeException
         #".*(EvalReader|eval reading) not allowed when \*read-eval\* is false.*"

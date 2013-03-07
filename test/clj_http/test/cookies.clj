@@ -1,7 +1,7 @@
 (ns clj-http.test.cookies
   (:use [clj-http.cookies]
         [clj-http.util]
-        [clojure.test])
+        [name.stadig.conjecture])
   (:import (org.apache.http.impl.cookie BasicClientCookie BasicClientCookie2)))
 
 (defn refer-private [ns]

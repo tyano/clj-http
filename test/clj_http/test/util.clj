@@ -1,6 +1,6 @@
 (ns clj-http.test.util
   (:use [clj-http.util]
-        [clojure.test]))
+        [name.stadig.conjecture]))
 
 (deftest test-lower-case-keys
   (are [map expected]

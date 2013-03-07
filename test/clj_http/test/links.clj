@@ -1,5 +1,5 @@
 (ns clj-http.test.links
-  (:use clojure.test
+  (:use name.stadig.conjecture
         clj-http.links))
 
 (defn- link-handler [link-header]

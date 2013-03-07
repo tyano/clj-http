@@ -1,14 +1,16 @@
 (ns clj-http.test.client
-  (:use [clojure.test]
-        [clojure.java.io :only [resource]]
-        [clj-http.test.core :only [run-server]])
+  (:use [name.stadig.conjecture]
+        [clojure.java.io :only [resource]])
   (:require [clj-http.client :as client]
             [clj-http.conn-mgr :as conn]
+            [clj-http.test.support :as support]
             [clj-http.util :as util]
             [cheshire.core :as json])
   (:import (java.net UnknownHostException)
            (java.util Arrays)
            (java.io ByteArrayInputStream)))
+
+(use-fixtures :once support/server-fixture)
 
 (def base-req
   {:scheme :http
@@ -16,7 +18,6 @@
    :server-port 18080})
 
 (deftest ^{:integration true} roundtrip
-  (run-server)
   (Thread/sleep 1000)
   ;; roundtrip with scheme as a keyword
   (let [resp (client/request (merge base-req {:uri "/get" :method :get}))]
@@ -490,7 +491,6 @@
            (:headers resp)))))
 
 (deftest ^{:integration true} t-request-without-url-set
-  (run-server)
   (Thread/sleep 1000)
   ;; roundtrip with scheme as a keyword
   (let [resp (client/request (merge base-req {:uri "/redirect-to-get"
@@ -500,7 +500,6 @@
     (is (= "get" (:body resp)))))
 
 (deftest ^{:integration true} t-reusable-conn-mgrs
-  (run-server)
   (Thread/sleep 1000)
   (let [cm (conn/make-reusable-conn-manager {:timeout 10 :insecure? false})
         resp1 (client/request (merge base-req {:uri "/redirect-to-get"
