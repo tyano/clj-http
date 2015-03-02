@@ -30,3 +30,8 @@
   :test-selectors {:default  #(not (:integration %))
                    :integration :integration
                    :all (constantly true)})
+
+(cemerick.pomegranate.aether/register-wagon-factory!
+   "scp" #(let [c (resolve 'org.apache.maven.wagon.providers.ssh.external.ScpExternalWagon)]
+                      (clojure.lang.Reflector/invokeConstructor c (into-array []))))
+
